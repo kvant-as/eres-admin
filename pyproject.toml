@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eres-admin"
+version = "0.1.0"
+description = "Admin panel engine for kvant-as Flask apps (EnPlans, ErespondentN)"
+requires-python = ">=3.10"
+dependencies = [
+    "Flask>=3.0.0",
+    "Flask-Login>=0.6.0",
+    "Flask-SQLAlchemy>=3.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+eres_admin = [
+    "templates/**/*.html",
+    "static/**/*",
+]

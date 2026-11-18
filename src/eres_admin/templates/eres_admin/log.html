@@ -1,0 +1,80 @@
+{% extends "eres_admin/base.html" %}
+{% block title %}Журнал изменений — {{ site.brand }}{% endblock %}
+{% block crumbs %}<span class="ea-crumbs">Служебные</span>{% endblock %}
+{% block page_title %}Журнал изменений{% endblock %}
+
+{% block content %}
+  <section class="ea-card ea-card--flush">
+    <form class="ea-toolbar" method="get" data-ea-autosubmit>
+      <label class="ea-select">
+        <span class="ea-select-label">Раздел</span>
+        <select name="model">
+          <option value="">все</option>
+          {% for m in models %}<option value="{{ m.key }}" {{ 'selected' if m.key == model_key }}>{{ m.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="ea-select">
+        <span class="ea-select-label">Действие</span>
+        <select name="action">
+          <option value="">все</option>
+          <option value="create" {{ 'selected' if action == 'create' }}>создание</option>
+          <option value="update" {{ 'selected' if action == 'update' }}>изменение</option>
+          <option value="delete" {{ 'selected' if action == 'delete' }}>удаление</option>
+          <option value="export" {{ 'selected' if action == 'export' }}>выгрузка</option>
+        </select>
+      </label>
+      <span class="ea-toolbar-spacer"></span>
+      <span class="ea-total">{{ total }}</span>
+      {% if model_key or action %}<a class="ea-link" href="{{ url_for('eres_admin.log_view') }}">Сбросить</a>{% endif %}
+    </form>
+
+    {% if entries %}
+      <div class="ea-table-wrap">
+        <table class="ea-table ea-table--log">
+          <thead><tr><th>Когда</th><th>Кто</th><th>Действие</th><th>Запись</th><th>Изменения</th></tr></thead>
+          <tbody>
+            {% for e in entries %}
+              <tr>
+                <td class="ea-nowrap">{{ e.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>{{ e.user_label }}</td>
+                <td><span class="ea-action-tag ea-action-tag--{{ e.action }}">{{ e.action_label }}</span></td>
+                <td class="ea-col-main">
+                  {% if e.action != 'delete' and e.model_key in site._models %}
+                    <a href="{{ url_for('eres_admin.edit_view', key=e.model_key, pk=e.object_id) }}">{{ e.object_label }}</a>
+                  {% else %}{{ e.object_label }}{% endif %}
+                  <span class="ea-sub">{{ e.model_name }}, ID {{ e.object_id }}</span>
+                </td>
+                <td>
+                  {% if e.change_list %}
+                    <ul class="ea-changes">
+                      {% for c in e.change_list %}
+                        <li><span class="ea-changes-field">{{ c.field }}</span>{% if c.old is not none %} <span class="ea-changes-old">{{ c.old }}</span> →{% endif %} <span class="ea-changes-new">{{ c.new }}</span></li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}<span class="ea-sub">—</span>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if pager %}
+        <footer class="ea-table-foot">
+          <span></span>
+          <nav class="ea-pager" aria-label="Страницы">
+            {% for p in pager %}
+              {% if p is none %}<span class="ea-page ea-page--gap">…</span>
+              {% elif p == page %}<span class="ea-page is-on" aria-current="page">{{ p }}</span>
+              {% else %}<a class="ea-page" href="{{ link(page=p) }}">{{ p }}</a>{% endif %}
+            {% endfor %}
+          </nav>
+        </footer>
+      {% endif %}
+    {% else %}
+      <div class="ea-empty">
+        {{ icon('history') }}
+        <p>{% if model_key or action %}Таких изменений нет.{% else %}Журнал пуст. Сюда попадают записи, созданные, изменённые и удалённые через админку.{% endif %}</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

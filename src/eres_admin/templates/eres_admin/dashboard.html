@@ -1,0 +1,163 @@
+{% extends "eres_admin/base.html" %}
+{% block title %}Панель управления — {{ site.brand }}{% endblock %}
+{% block page_title %}Панель управления{% endblock %}
+{% block page_subtitle %}С возвращением, {{ greeting }}{% endblock %}
+{% block page_actions %}
+  {% if online is not none %}
+    <span class="ea-online"><span class="ea-online-dot"></span>{{ online }} онлайн</span>
+  {% endif %}
+  <a class="ea-btn ea-btn--ghost" href="{{ url_for('eres_admin.export_database') }}" data-ea-download
+     title="ZIP-архив: по CSV-файлу на каждую таблицу. Хэши паролей не выгружаются.">{{ icon('download') }}<span>Скачать базу (CSV)</span></a>
+  <a class="ea-btn ea-btn--ghost" href="{{ url_for('eres_admin.dashboard') }}">{{ icon('refresh') }}<span>Обновить</span></a>
+{% endblock %}
+
+{% block content %}
+  {% if cards %}
+    <div class="ea-stats">
+      {% for card in cards %}
+        <a class="ea-stat ea-tone--{{ card.tone }}" href="{{ card.url }}">
+          <span class="ea-stat-icon">{{ icon(card.icon) }}</span>
+          <span class="ea-stat-value">{{ card.value }}</span>
+          <span class="ea-stat-label">{{ card.label }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="ea-dash-row ea-dash-row--main">
+    <div class="ea-dash-main">
+    {% if charts %}
+      <section class="ea-card ea-chart-card" data-ea-chart>
+        <header class="ea-chart-head">
+          <div class="ea-chart-title">
+            <h2 class="ea-card-title">{{ icon('trend') }}<span data-ea-chart-title>{{ charts[0].title }}</span></h2>
+            <p class="ea-chart-sub">Последние {{ charts[0].points|length }} дней</p>
+          </div>
+          <dl class="ea-chart-totals">
+            <div><dd data-ea-total="today">{{ charts[0].today }}</dd><dt>Сегодня</dt></div>
+            <div><dd data-ea-total="week">{{ charts[0].week }}</dd><dt>За 7 дней</dt></div>
+            <div><dd data-ea-total="month">{{ charts[0].month }}</dd><dt>За 30 дней</dt></div>
+          </dl>
+        </header>
+        {% if charts|length > 1 %}
+          <div class="ea-chart-tabs" role="tablist">
+            {% for c in charts %}
+              <button type="button" class="ea-chart-tab{% if loop.first %} is-active{% endif %}" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}" data-ea-chart-tab="{{ loop.index0 }}">{{ c.title }}</button>
+            {% endfor %}
+          </div>
+        {% endif %}
+        <div class="ea-chart" data-ea-chart-canvas role="img" aria-label="График по дням"></div>
+        <script type="application/json" data-ea-chart-data>{{ charts|tojson }}</script>
+      </section>
+    {% endif %}
+      <section class="ea-card">
+        <header class="ea-card-head">
+          <h2 class="ea-card-title">{{ icon('history') }}<span>Последние изменения</span></h2>
+          <a class="ea-link" href="{{ url_for('eres_admin.log_view') }}">Весь журнал</a>
+        </header>
+        {% if recent %}
+          <ol class="ea-timeline">
+            {% for e in recent %}
+              <li class="ea-timeline-item ea-timeline-item--{{ e.action }}">
+                <span class="ea-timeline-dot"></span>
+                <span class="ea-timeline-body">
+                  <span class="ea-timeline-title">
+                    {{ e.action_label }}:
+                    {% if e.action != 'delete' and e.model_key in site._models %}
+                      <a class="ea-link" href="{{ url_for('eres_admin.edit_view', key=e.model_key, pk=e.object_id) }}">{{ e.object_label }}</a>
+                    {% else %}{{ e.object_label }}{% endif %}
+                  </span>
+                  <span class="ea-timeline-meta">{{ e.model_name }}, {{ e.user_label }}, {{ e.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                </span>
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <p class="ea-empty-line">Изменений через админку пока не было. Здесь появятся созданные, изменённые и удалённые записи.</p>
+        {% endif %}
+      </section>
+    </div>
+
+    <div class="ea-dash-side">
+      <section class="ea-card">
+        <header class="ea-card-head"><h2 class="ea-card-title">{{ icon('server') }}<span>Система</span></h2></header>
+        <dl class="ea-kv">
+          {% for label, value in system %}
+            <div><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+          {% endfor %}
+        </dl>
+      </section>
+
+      {% if actions %}
+        <section class="ea-card">
+          <header class="ea-card-head"><h2 class="ea-card-title">{{ icon('play') }}<span>Действия</span></h2></header>
+          <div class="ea-actions">
+            {% for a in actions %}
+              {% if a.type == "upload" %}
+                <input type="file" id="eaActionFile{{ loop.index }}" data-url="{{ a.url }}" data-field="{{ a.field }}" {% if a.accept %}accept="{{ a.accept }}"{% endif %} hidden>
+                <button type="button" class="ea-action" data-ea-action-upload="eaActionFile{{ loop.index }}" {% if a.confirm %}data-confirm="{{ a.confirm }}"{% endif %}>
+                  {{ icon('upload') }}<span>{{ a.label }}</span>
+                </button>
+              {% else %}
+                <button type="button" class="ea-action" data-ea-action="{{ a.url }}" data-method="{{ a.method }}" {% if a.confirm %}data-confirm="{{ a.confirm }}"{% endif %}>
+                  {{ icon('play') }}<span>{{ a.label }}</span>
+                </button>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <p class="ea-action-status" data-ea-action-status hidden></p>
+        </section>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="ea-dash-row ea-dash-row--grid">
+    {% for panel in panels %}
+      <section class="ea-card">
+        <header class="ea-card-head">
+          <h2 class="ea-card-title">{{ icon('message') }}<span>{{ panel.title }}</span></h2>
+          {% if panel.more_url %}
+            <a class="ea-link" href="{{ panel.more_url }}">{{ panel.more_label or "Показать все" }}</a>
+          {% elif panel.rows %}
+            <span class="ea-count">{{ panel.rows|length }}</span>
+          {% endif %}
+        </header>
+        <div class="ea-list">
+          {% for row in panel.rows %}
+            <a class="ea-list-row" href="{{ row.url }}">
+              <span class="ea-list-main">
+                <span class="ea-list-title">{{ row.title }}</span>
+                {% if row.subtitle %}<span class="ea-list-sub">{{ row.subtitle }}</span>{% endif %}
+              </span>
+              {% if row.meta %}<span class="ea-list-meta{{ ' is-accent' if row.unread }}">{{ row.meta }}</span>{% endif %}
+            </a>
+          {% else %}
+            <p class="ea-empty-line">{{ panel.empty }}</p>
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+
+    {% for b in breakdowns %}
+      <section class="ea-card">
+        <header class="ea-card-head">
+          <h2 class="ea-card-title">{{ icon(b.icon) }}<span>{{ b.title }}</span></h2>
+          <span class="ea-muted">всего {{ b.total }}</span>
+        </header>
+        {% if b.rows %}
+          <ul class="ea-bars">
+            {% for r in b.rows %}
+              <li class="ea-bar">
+                <span class="ea-bar-head"><span class="ea-bar-label">{{ r.label }}</span><span class="ea-bar-value">{{ r.value }}</span></span>
+                <span class="ea-bar-track"><span class="ea-bar-fill" style="width: {{ r.pct }}%"></span></span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="ea-empty-line">Данных пока нет.</p>
+        {% endif %}
+      </section>
+    {% endfor %}
+
+  </div>
+{% endblock %}

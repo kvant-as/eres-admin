@@ -1,0 +1,179 @@
+{% extends "eres_admin/base.html" %}
+{% set record_title = ma.title(obj) %}
+{% block title %}{{ 'Новая запись' if creating else record_title }} — {{ ma.name }}{% endblock %}
+{% block crumbs %}<a class="ea-crumbs" href="{{ back_url }}">{{ icon('chevron', 'ea-icon ea-crumbs-back') }}{{ ma.name }}</a>{% endblock %}
+{% block page_title %}{{ 'Новая запись' if creating else record_title }}{% endblock %}
+{% block page_actions %}
+  {% if ma.can_edit or creating %}
+    {% if sections %}
+      <button type="submit" form="eaForm" class="ea-btn ea-btn--primary" title="Сохранить (Ctrl+S)">{{ icon('save') }}<span>Сохранить</span></button>
+    {% endif %}
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  {% if form_error %}
+    <div class="ea-alert ea-alert--error" role="alert">
+      <strong>Запись не сохранена.</strong> {{ form_error }}
+    </div>
+  {% elif has_errors %}
+    <div class="ea-alert ea-alert--error" role="alert">Запись не сохранена: проверьте отмеченные поля.</div>
+  {% endif %}
+
+  <div class="ea-edit">
+    <div class="ea-edit-main">
+      {% if sections %}
+        <form id="eaForm" class="ea-form" method="post" enctype="multipart/form-data" data-ea-form>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+          <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+          {% for section in sections %}
+            <section class="ea-card">
+              <header class="ea-card-head"><h2 class="ea-card-title">{{ section.title }}</h2></header>
+              <div class="ea-fields">
+                {% for fv in section.fields %}
+                  {% set f = fv.spec %}
+                  {% set wide = f.type in ('text', 'fk-search', 'file') %}
+                  <div class="ea-field{% if wide %} ea-field--wide{% endif %}{% if f.type == 'bool' %} ea-field--bool{% endif %}{% if fv.error %} has-error{% endif %}">
+                    {% if f.type == 'bool' and not f.readonly %}
+                      <label class="ea-switch">
+                        <input type="checkbox" id="f_{{ f.name }}" name="{{ f.name }}" {{ 'checked' if fv.value }} {{ 'disabled' if not ma.can_edit and not creating }}>
+                        <span class="ea-switch-track" aria-hidden="true"></span>
+                        <span class="ea-switch-label">{{ f.label }}</span>
+                      </label>
+                    {% else %}
+                      <label class="ea-label" for="f_{{ f.name }}">{{ f.label }}{% if f.required %}<span class="ea-req" aria-hidden="true">*</span>{% endif %}</label>
+
+                      {% if f.readonly %}
+                        <div class="ea-readonly">{{ fv.value if fv.value not in (none, '') else '—' }}</div>
+
+                      {% elif f.type == 'fk-search' %}
+                        <div class="ea-combo" data-ea-combo="{{ fv.target_key or '' }}">
+                          {{ icon('search') }}
+                          <input type="text" class="ea-input" autocomplete="off" placeholder="{{ f.placeholder or 'Начните вводить название' }}" value="{{ fv.current_label }}" data-ea-combo-input>
+                          <input type="hidden" id="f_{{ f.name }}" name="{{ f.name }}" value="{{ fv.value if fv.value is not none else '' }}">
+                          <div class="ea-combo-list" data-ea-combo-list role="listbox"></div>
+                        </div>
+
+                      {% elif f.type == 'text' %}
+                        <textarea class="ea-input" id="f_{{ f.name }}" name="{{ f.name }}" rows="{{ f.rows }}" placeholder="{{ f.placeholder or '' }}">{{ fv.value or '' }}</textarea>
+
+                      {% elif f.type in ('select', 'fk') %}
+                        <div class="ea-select-wrap">
+                          <select class="ea-input" id="f_{{ f.name }}" name="{{ f.name }}">
+                            {% if f.blank %}<option value="">Не выбрано</option>{% endif %}
+                            {% for val, label in fv.options %}
+                              <option value="{{ val }}" {{ 'selected' if fv.value is not none and fv.value|string == val|string }}>{{ label }}</option>
+                            {% endfor %}
+                          </select>
+                          {{ icon('chevron-down', 'ea-icon ea-select-chevron') }}
+                        </div>
+
+                      {% elif f.type == 'file' %}
+                        <div class="ea-file" data-ea-file>
+                          {% set url = f.upload_url(fv.value) %}
+                          <div class="ea-file-preview" data-ea-file-preview>
+                            {% if fv.value and f.is_image and url %}<img src="{{ url }}" alt="">{% elif fv.value %}{{ icon('file') }}{% else %}{{ icon('upload') }}{% endif %}
+                          </div>
+                          <div class="ea-file-info">
+                            <span class="ea-file-name" data-ea-file-name>{{ fv.value or 'Файл не выбран' }}</span>
+                            <label class="ea-btn ea-btn--ghost ea-btn--sm">
+                              <input type="file" id="f_{{ f.name }}" name="{{ f.name }}" {% if f.accept %}accept="{{ f.accept }}"{% endif %} hidden>
+                              <span>{{ 'Заменить файл' if fv.value else 'Выбрать файл' }}</span>
+                            </label>
+                          </div>
+                        </div>
+
+                      {% elif f.type == 'date' %}
+                        <input class="ea-input" type="date" id="f_{{ f.name }}" name="{{ f.name }}" value="{{ fv.value.strftime('%Y-%m-%d') if fv.value else '' }}">
+
+                      {% elif f.type == 'datetime' %}
+                        <input class="ea-input" type="datetime-local" id="f_{{ f.name }}" name="{{ f.name }}" value="{{ fv.value.strftime('%Y-%m-%dT%H:%M') if fv.value else '' }}">
+
+                      {% elif f.type == 'password' %}
+                        <div class="ea-password">
+                          <input class="ea-input" type="password" id="f_{{ f.name }}" name="{{ f.name }}" value="" autocomplete="new-password" placeholder="{{ f.placeholder or ('Задайте пароль' if creating else 'Оставьте пустым, чтобы не менять') }}">
+                          <button type="button" class="ea-password-toggle" data-ea-password-toggle aria-label="Показать пароль">{{ icon('eye') }}</button>
+                        </div>
+
+                      {% else %}
+                        <input class="ea-input" type="{{ f.input_type }}" {% if f.type == 'float' %}step="any"{% endif %}
+                               id="f_{{ f.name }}" name="{{ f.name }}" placeholder="{{ f.placeholder or '' }}"
+                               value="{{ fv.value if fv.value is not none else '' }}">
+                      {% endif %}
+                    {% endif %}
+
+                    {% if fv.error %}<p class="ea-hint ea-hint--error">{{ fv.error }}</p>
+                    {% elif f.help %}<p class="ea-hint">{{ f.help }}</p>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            </section>
+          {% endfor %}
+        </form>
+      {% else %}
+        <section class="ea-card">
+          <header class="ea-card-head"><h2 class="ea-card-title">Данные записи</h2></header>
+          <dl class="ea-details">
+            {% for name, value in details %}
+              <div class="ea-details-row"><dt>{{ name }}</dt><dd>{{ value }}</dd></div>
+            {% endfor %}
+          </dl>
+        </section>
+      {% endif %}
+    </div>
+
+    <aside class="ea-edit-side">
+      <section class="ea-card">
+        <header class="ea-card-head"><h2 class="ea-card-title">Запись</h2></header>
+        <dl class="ea-meta">
+          <div><dt>Раздел</dt><dd>{{ ma.name }}</dd></div>
+          {% if not creating %}<div><dt>ID</dt><dd>{{ ma.pk(obj) }}</dd></div>{% endif %}
+          {% if ma.readonly %}<div><dt>Доступ</dt><dd>Только просмотр</dd></div>{% endif %}
+        </dl>
+        {% if sections and (ma.can_edit or creating) %}
+          <div class="ea-side-actions">
+            <button type="submit" form="eaForm" class="ea-btn ea-btn--primary ea-btn--block">{{ icon('save') }}<span>Сохранить</span></button>
+            <button type="submit" form="eaForm" name="_continue" value="1" class="ea-btn ea-btn--ghost ea-btn--block">Сохранить и продолжить</button>
+          </div>
+          <p class="ea-dirty" data-ea-dirty hidden>Есть несохранённые изменения</p>
+        {% endif %}
+        {% if not creating and ma.can_delete %}
+          <form method="post" action="{{ url_for('eres_admin.delete_view', key=ma.key, pk=ma.pk(obj)) }}" class="ea-delete" data-confirm="Удалить «{{ record_title }}»? Это действие нельзя отменить.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <input type="hidden" name="next" value="{{ back_url }}">
+            <button type="submit" class="ea-btn ea-btn--danger-ghost ea-btn--block">{{ icon('trash') }}<span>Удалить запись</span></button>
+          </form>
+        {% endif %}
+      </section>
+
+      {% if not creating %}
+        <section class="ea-card">
+          <header class="ea-card-head"><h2 class="ea-card-title">История</h2></header>
+          {% if history %}
+            <ol class="ea-timeline ea-timeline--compact">
+              {% for e in history %}
+                <li class="ea-timeline-item ea-timeline-item--{{ e.action }}">
+                  <span class="ea-timeline-dot"></span>
+                  <span class="ea-timeline-body">
+                    <span class="ea-timeline-title">{{ e.action_label }}</span>
+                    <span class="ea-timeline-meta">{{ e.user_label }}, {{ e.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                    {% if e.change_list %}
+                      <ul class="ea-changes">
+                        {% for c in e.change_list[:6] %}
+                          <li><span class="ea-changes-field">{{ c.field }}</span>{% if c.old is not none %} <span class="ea-changes-old">{{ c.old }}</span> →{% endif %} <span class="ea-changes-new">{{ c.new }}</span></li>
+                        {% endfor %}
+                        {% if e.change_list|length > 6 %}<li class="ea-changes-more">и ещё {{ e.change_list|length - 6 }}</li>{% endif %}
+                      </ul>
+                    {% endif %}
+                  </span>
+                </li>
+              {% endfor %}
+            </ol>
+          {% else %}
+            <p class="ea-empty-line">Через админку запись ещё не меняли.</p>
+          {% endif %}
+        </section>
+      {% endif %}
+    </aside>
+  </div>
+{% endblock %}

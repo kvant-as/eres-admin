@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() if csrf_token is defined else '' }}">
+  <title>{% block title %}{{ site.title }} — {{ site.brand }}{% endblock %}</title>
+  <script>
+    (function () {
+      var theme = 'dark';
+      try { theme = localStorage.getItem({{ site.theme_storage_key|tojson }}) || 'dark'; } catch (e) {}
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('eres_admin.static', filename='eres_admin/admin.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body class="ea">
+  <aside class="ea-side" id="eaSide" aria-label="Разделы">
+    <div class="ea-side-top">
+      <a class="ea-brand" href="{{ url_for('eres_admin.dashboard') }}">
+        <span class="ea-brand-name">{{ site.title }}</span>
+        <span class="ea-brand-app">{{ site.brand }}</span>
+      </a>
+      <button type="button" class="ea-side-close" data-ea-side-close aria-label="Закрыть меню">{{ icon('close') }}</button>
+    </div>
+
+    <button type="button" class="ea-jump" data-ea-palette-open>
+      {{ icon('search') }}
+      <span class="ea-jump-text">Поиск раздела</span>
+      <kbd>Ctrl K</kbd>
+    </button>
+
+    <nav class="ea-nav">
+      <a class="ea-nav-item{% if active_endpoint == 'eres_admin.dashboard' %} is-active{% endif %}" href="{{ url_for('eres_admin.dashboard') }}">
+        {{ icon('home') }}<span>Обзор</span>
+      </a>
+      {% for group, items in groups.items() %}
+        {% set gid = 'g' ~ loop.index %}
+        <section class="ea-nav-group" data-ea-group="{{ group }}">
+          <button type="button" class="ea-nav-group-head" aria-expanded="true" aria-controls="{{ gid }}">
+            <span>{{ group }}</span>{{ icon('chevron-down', 'ea-icon ea-nav-chevron') }}
+          </button>
+          <div class="ea-nav-group-body" id="{{ gid }}">
+            {% for item in items %}
+              {% if item.is_link %}
+                <a class="ea-nav-item{% if active_endpoint == item.endpoint %} is-active{% endif %}" href="{{ item.url }}">{{ icon(item.icon) }}<span>{{ item.name }}</span></a>
+              {% else %}
+                <a class="ea-nav-item{% if active_key == item.key %} is-active{% endif %}" href="{{ item.url }}">{{ icon(item.icon) }}<span>{{ item.name }}</span>{% if item.key in nav_counts %}<span class="ea-nav-count" title="{{ nav_counts[item.key] }}">{{ short_number(nav_counts[item.key]) }}</span>{% endif %}</a>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endfor %}
+      <a class="ea-nav-item ea-nav-log{% if active_endpoint == 'eres_admin.log_view' %} is-active{% endif %}" href="{{ url_for('eres_admin.log_view') }}">
+        {{ icon('history') }}<span>Журнал изменений</span>
+      </a>
+    </nav>
+
+    <div class="ea-side-foot">
+      <div class="ea-me" title="{{ current_user.email or current_user.login or '' }}">
+        <span class="ea-avatar" aria-hidden="true">{{ ea_user_initials() }}</span>
+        <span class="ea-me-name">{{ current_user.first_name or current_user.email or 'Администратор' }}</span>
+        <a class="ea-tool" href="{{ url_for(site.logout_endpoint) }}" title="Выйти" aria-label="Выйти">{{ icon('logout') }}</a>
+      </div>
+      <div class="ea-side-meta">
+        <span class="ea-version">Версия {{ ea_version() }}</span>
+        <span class="ea-side-tools">
+          {% if site.site_endpoint %}
+            <a class="ea-tool" href="{{ url_for(site.site_endpoint) }}" title="Открыть сайт" aria-label="Открыть сайт">{{ icon('external') }}</a>
+          {% endif %}
+          <button type="button" class="ea-tool" data-ea-theme title="Сменить тему" aria-label="Сменить тему">
+            <span class="ea-theme-light">{{ icon('moon') }}</span><span class="ea-theme-dark">{{ icon('sun') }}</span>
+          </button>
+        </span>
+      </div>
+    </div>
+  </aside>
+  <div class="ea-scrim" data-ea-side-close></div>
+
+  <div class="ea-main">
+    <header class="ea-titlebar">
+      <button type="button" class="ea-burger" data-ea-side-open aria-label="Открыть меню">{{ icon('menu') }}</button>
+      <div class="ea-titlebar-text">
+        {% block crumbs %}{% endblock %}
+        <h1 class="ea-title">{% block page_title %}{% endblock %}</h1>
+        {% if self.page_subtitle() %}<p class="ea-subtitle">{% block page_subtitle %}{% endblock %}</p>{% endif %}
+      </div>
+      <div class="ea-titlebar-actions">{% block page_actions %}{% endblock %}</div>
+    </header>
+
+    <main class="ea-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <div class="ea-toasts" aria-live="polite">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="ea-toast ea-toast--{{ 'error' if cat in ('error', 'danger') else 'success' if cat == 'success' else 'info' }}" role="status">
+          <span class="ea-toast-text">{{ msg }}</span>
+          <button type="button" class="ea-toast-close" aria-label="Закрыть">{{ icon('close') }}</button>
+        </div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+
+  <dialog class="ea-dialog" id="eaConfirm">
+    <form method="dialog" class="ea-dialog-body">
+      <h2 class="ea-dialog-title" data-ea-confirm-title>Подтвердите действие</h2>
+      <p class="ea-dialog-text" data-ea-confirm-text></p>
+      <div class="ea-dialog-actions">
+        <button value="cancel" class="ea-btn ea-btn--ghost">Отмена</button>
+        <button value="ok" class="ea-btn ea-btn--danger" data-ea-confirm-ok>Подтвердить</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="ea-dialog ea-palette" id="eaPalette" aria-label="Переход к разделу">
+    <div class="ea-palette-box">
+      <div class="ea-palette-search">
+        {{ icon('search') }}
+        <input type="text" placeholder="Раздел, например «Организации»" autocomplete="off" data-ea-palette-input>
+        <kbd>Esc</kbd>
+      </div>
+      <ul class="ea-palette-list" data-ea-palette-list role="listbox"></ul>
+    </div>
+  </dialog>
+
+  <script type="application/json" id="eaPaletteData">{{ palette_items|tojson }}</script>
+  <script>window.EA = { themeKey: {{ site.theme_storage_key|tojson }}, fkSearchUrl: {{ url_for('eres_admin.fk_search_view')|tojson }} };</script>
+  <script src="{{ url_for('eres_admin.static', filename='eres_admin/admin.js') }}" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

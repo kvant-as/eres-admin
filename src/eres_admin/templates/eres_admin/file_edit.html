@@ -1,0 +1,29 @@
+{% extends "eres_admin/base.html" %}
+{% block title %}{{ name }} — {{ section.name }}{% endblock %}
+{% block crumbs %}<a class="ea-crumbs" href="{{ url_for('eres_admin.files_view', key=section.key, path=parent or none) }}">{{ icon('chevron', 'ea-icon ea-crumbs-back') }}{{ section.name }}{% if parent %} / {{ parent }}{% endif %}</a>{% endblock %}
+{% block page_title %}{{ name }}{% endblock %}
+{% block page_actions %}
+  <a class="ea-btn ea-btn--ghost" href="{{ url_for('eres_admin.files_download', key=section.key, path=rel) }}">{{ icon('download') }}<span>Скачать</span></a>
+  <button type="submit" form="eaForm" class="ea-btn ea-btn--primary" title="Сохранить (Ctrl+S)">{{ icon('save') }}<span>Сохранить</span></button>
+{% endblock %}
+
+{% block content %}
+  <form id="eaForm" method="post" action="{{ url_for('eres_admin.files_edit', key=section.key) }}" data-ea-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <input type="hidden" name="path" value="{{ rel }}">
+    <section class="ea-card">
+      <header class="ea-card-head">
+        <h2 class="ea-card-title">{{ icon('edit') }}<span>Содержимое</span></h2>
+        <span class="ea-muted">сохраняется в UTF-8</span>
+      </header>
+      <div class="ea-card-body">
+        <textarea class="ea-input ea-code" name="content" spellcheck="false" aria-label="Содержимое файла">{{ content }}</textarea>
+      </div>
+      <div class="ea-form-actions">
+        <button type="submit" class="ea-btn ea-btn--primary">{{ icon('save') }}<span>Сохранить</span></button>
+        <button type="submit" name="_continue" value="1" class="ea-btn ea-btn--ghost">Сохранить и продолжить</button>
+        <p class="ea-dirty" data-ea-dirty hidden>Есть несохранённые изменения</p>
+      </div>
+    </section>
+  </form>
+{% endblock %}

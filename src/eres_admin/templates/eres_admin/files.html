@@ -1,0 +1,181 @@
+{% extends "eres_admin/base.html" %}
+{% block title %}{{ section.name }} — {{ site.brand }}{% endblock %}
+{% block crumbs %}
+  <nav class="ea-crumbs ea-path" aria-label="Путь">
+    {% for c in crumbs %}
+      {% if not loop.last %}<a href="{{ url_for('eres_admin.files_view', key=section.key, path=c.rel or none) }}">{{ c.name }}</a><span aria-hidden="true">/</span>{% else %}<span>{{ c.name }}</span>{% endif %}
+    {% endfor %}
+  </nav>
+{% endblock %}
+{% block page_title %}{{ crumbs[-1].name }}{% endblock %}
+{% block page_subtitle %}{{ total_files }} файл{{ '' if total_files % 10 == 1 and total_files % 100 != 11 else 'а' if total_files % 10 in (2,3,4) and total_files % 100 not in (12,13,14) else 'ов' }}, {{ total_size }}{% if disk_free %} · свободно на диске {{ disk_free }}{% endif %}{% endblock %}
+{% block page_actions %}
+  <button type="button" class="ea-btn ea-btn--ghost" data-ea-dialog-open="eaMkdir">{{ icon('folder-plus') }}<span>Новая папка</span></button>
+  <button type="button" class="ea-btn ea-btn--primary" data-ea-upload-pick>{{ icon('upload') }}<span>Загрузить файлы</span></button>
+{% endblock %}
+
+{% block content %}
+  <form id="eaUploadForm" method="post" action="{{ url_for('eres_admin.files_upload', key=section.key) }}" enctype="multipart/form-data" hidden>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <input type="hidden" name="path" value="{{ rel }}">
+    <input type="file" name="files" multiple data-ea-upload-input>
+  </form>
+
+  <section class="ea-card ea-card--flush ea-files" data-ea-dropzone>
+    <div class="ea-toolbar">
+      <label class="ea-search">
+        {{ icon('search') }}
+        <input type="search" placeholder="Найти в этой папке" autocomplete="off" aria-label="Найти в этой папке" data-ea-files-filter>
+      </label>
+      {% if has_usage %}
+        <label class="ea-select">
+          <span class="ea-select-label">Привязка</span>
+          <select data-ea-files-usage>
+            <option value="">все</option>
+            <option value="used">используются</option>
+            <option value="free">не используются</option>
+          </select>
+        </label>
+      {% endif %}
+      <span class="ea-toolbar-spacer"></span>
+      <span class="ea-total">Перетащите файлы сюда, чтобы загрузить</span>
+    </div>
+
+    <form class="ea-bulk" method="post" action="{{ url_for('eres_admin.files_delete', key=section.key) }}" id="eaFilesBulk"
+          data-confirm="Удалить выбранное? Папки удаляются вместе с содержимым. Действие нельзя отменить." hidden>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+      <input type="hidden" name="back" value="{{ rel }}">
+      <span class="ea-bulk-count" data-ea-bulk-count></span>
+      <button type="submit" class="ea-btn ea-btn--danger ea-btn--sm">{{ icon('trash') }}<span>Удалить выбранные</span></button>
+      <button type="button" class="ea-btn ea-btn--ghost ea-btn--sm" data-ea-bulk-clear>Снять выделение</button>
+    </form>
+
+    {% if entries or rel %}
+      <div class="ea-table-wrap">
+        <table class="ea-table ea-files-table">
+          <thead>
+            <tr>
+              <th class="ea-col-check"><input type="checkbox" data-ea-check-all aria-label="Выбрать все"></th>
+              <th>Имя</th>
+              {% if has_usage %}<th>Привязка</th>{% endif %}
+              <th>Размер</th>
+              <th>Изменён</th>
+              <th class="ea-col-actions"><span class="visually-hidden">Действия</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if rel %}
+              <tr class="ea-files-up">
+                <td class="ea-col-check"></td>
+                <td colspan="{{ 5 if has_usage else 4 }}">
+                  <a class="ea-file-name-cell" href="{{ url_for('eres_admin.files_view', key=section.key, path=rel.rsplit('/', 1)[0] if '/' in rel else none) }}">
+                    <span class="ea-file-icon">{{ icon('chevron', 'ea-icon ea-crumbs-back') }}</span><span>На уровень выше</span>
+                  </a>
+                </td>
+              </tr>
+            {% endif %}
+            {% for e in entries %}
+              {% set label = e.usage.label if e.usage and e.usage.label else none %}
+              <tr data-ea-file-row data-name="{{ (e.name ~ ' ' ~ (label or ''))|lower }}" data-used="{{ '1' if e.in_use else '0' }}" data-dir="{{ '1' if e.is_dir else '0' }}"
+                  {% if e.is_dir %}data-ea-href="{{ url_for('eres_admin.files_view', key=section.key, path=e.rel) }}"{% endif %}>
+                <td class="ea-col-check"><input type="checkbox" name="paths" value="{{ e.rel }}" form="eaFilesBulk" data-in-use="{{ '1' if e.in_use else '0' }}" aria-label="Выбрать {{ e.name }}"></td>
+                <td class="ea-col-main" data-label="Имя">
+                  {% if e.is_dir %}
+                    <a class="ea-file-name-cell" href="{{ url_for('eres_admin.files_view', key=section.key, path=e.rel) }}">
+                      <span class="ea-file-icon ea-file-icon--folder">{{ icon('folder') }}</span>
+                      <span class="ea-file-text"><span>{{ e.name }}</span></span>
+                    </a>
+                  {% else %}
+                    <a class="ea-file-name-cell" href="{{ url_for('eres_admin.files_download', key=section.key, path=e.rel, inline='1' if e.viewable else none, **({'as': label} if label else {})) }}" {% if e.viewable %}target="_blank" rel="noopener"{% endif %}>
+                      <span class="ea-file-icon ea-file-icon--{{ e.kind }}">{{ icon(kind_icons[e.kind]) }}</span>
+                      <span class="ea-file-text">
+                        <span>{{ label or e.name }}</span>
+                        {% if label %}<span class="ea-sub">{{ e.name }}</span>{% endif %}
+                      </span>
+                    </a>
+                  {% endif %}
+                </td>
+                {% if has_usage %}
+                  <td data-label="Привязка">
+                    {% if e.is_dir %}<span class="ea-sub">—</span>
+                    {% elif e.in_use %}
+                      {% if e.usage.url %}<a class="ea-badge ea-badge--link" href="{{ e.usage.url }}">{{ icon('link') }}{{ e.usage.title or 'Используется' }}</a>
+                      {% else %}<span class="ea-badge">{{ e.usage.title or 'Используется' }}</span>{% endif %}
+                    {% else %}<span class="ea-badge ea-badge--muted">не используется</span>{% endif %}
+                  </td>
+                {% endif %}
+                <td class="ea-col-compact" data-label="Размер">{{ e.size_label }}</td>
+                <td class="ea-col-compact" data-label="Изменён">{{ e.mtime.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td class="ea-col-actions">
+                  <div class="ea-row-actions">
+                    {% if not e.is_dir %}
+                      <a class="ea-icon-btn" href="{{ url_for('eres_admin.files_download', key=section.key, path=e.rel, **({'as': label} if label else {})) }}" title="Скачать" aria-label="Скачать {{ e.name }}">{{ icon('download') }}</a>
+                      {% if e.editable %}
+                        <a class="ea-icon-btn" href="{{ url_for('eres_admin.files_edit', key=section.key, path=e.rel) }}" title="Редактировать текст" aria-label="Редактировать {{ e.name }}">{{ icon('edit') }}</a>
+                      {% endif %}
+                      <button type="button" class="ea-icon-btn" title="Заменить содержимое (имя и привязка сохранятся)" aria-label="Заменить {{ e.name }}" data-ea-replace="{{ e.rel }}">{{ icon('replace') }}</button>
+                    {% endif %}
+                    {% if e.in_use %}
+                      <button type="button" class="ea-icon-btn" disabled title="Файл привязан к записи — переименование оборвёт ссылку" aria-label="Переименование недоступно">{{ icon('tag') }}</button>
+                    {% else %}
+                      <button type="button" class="ea-icon-btn" title="Переименовать" aria-label="Переименовать {{ e.name }}" data-ea-rename="{{ e.rel }}" data-name="{{ e.name }}">{{ icon('tag') }}</button>
+                    {% endif %}
+                    <form method="post" action="{{ url_for('eres_admin.files_delete', key=section.key) }}"
+                          data-confirm="{% if e.is_dir %}Удалить папку «{{ e.name }}» вместе со всем содержимым?{% elif e.in_use %}Файл «{{ label or e.name }}» привязан к записи ({{ e.usage.title or 'используется' }}). После удаления ссылка в ней перестанет работать. Удалить?{% else %}Удалить «{{ e.name }}»?{% endif %} Действие нельзя отменить.">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+                      <input type="hidden" name="paths" value="{{ e.rel }}">
+                      <input type="hidden" name="back" value="{{ rel }}">
+                      <button type="submit" class="ea-icon-btn ea-icon-btn--danger" title="Удалить" aria-label="Удалить {{ e.name }}">{{ icon('trash') }}</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+            <tr class="ea-files-nomatch" hidden><td colspan="{{ 6 if has_usage else 5 }}">Ничего не найдено по этому запросу.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+    {% if not entries %}
+      <div class="ea-empty">
+        {{ icon('folder') }}
+        <p>Папка пуста. Загрузите файлы кнопкой вверху или перетащите их сюда.</p>
+      </div>
+    {% endif %}
+    <div class="ea-drop-hint" aria-hidden="true">{{ icon('upload') }}<span>Отпустите, чтобы загрузить в «{{ crumbs[-1].name }}»</span></div>
+  </section>
+
+  <form id="eaReplaceForm" method="post" action="{{ url_for('eres_admin.files_replace', key=section.key) }}" enctype="multipart/form-data" hidden>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <input type="hidden" name="path" value="">
+    <input type="file" name="file">
+  </form>
+
+  <dialog class="ea-dialog" id="eaMkdir">
+    <form method="post" action="{{ url_for('eres_admin.files_mkdir', key=section.key) }}" class="ea-dialog-body">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+      <input type="hidden" name="path" value="{{ rel }}">
+      <h2 class="ea-dialog-title">Новая папка</h2>
+      <label class="ea-label" for="eaMkdirName">Название</label>
+      <input class="ea-input" id="eaMkdirName" name="name" required maxlength="200" autocomplete="off">
+      <div class="ea-dialog-actions ea-dialog-actions--spaced">
+        <button type="button" class="ea-btn ea-btn--ghost" data-ea-dialog-close>Отмена</button>
+        <button type="submit" class="ea-btn ea-btn--primary">Создать папку</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="ea-dialog" id="eaRename">
+    <form method="post" action="{{ url_for('eres_admin.files_rename', key=section.key) }}" class="ea-dialog-body">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+      <input type="hidden" name="path" value="">
+      <h2 class="ea-dialog-title">Переименовать</h2>
+      <label class="ea-label" for="eaRenameName">Новое имя</label>
+      <input class="ea-input" id="eaRenameName" name="name" required maxlength="200" autocomplete="off">
+      <div class="ea-dialog-actions ea-dialog-actions--spaced">
+        <button type="button" class="ea-btn ea-btn--ghost" data-ea-dialog-close>Отмена</button>
+        <button type="submit" class="ea-btn ea-btn--primary">Переименовать</button>
+      </div>
+    </form>
+  </dialog>
+{% endblock %}

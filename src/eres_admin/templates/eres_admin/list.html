@@ -1,0 +1,120 @@
+{% extends "eres_admin/base.html" %}
+{% block title %}{{ ma.name }} — {{ site.brand }}{% endblock %}
+{% block crumbs %}<span class="ea-crumbs">{{ ma.group }}</span>{% endblock %}
+{% block page_title %}{{ ma.name }}{% endblock %}
+{% block page_actions %}
+  <a class="ea-btn ea-btn--ghost" href="{{ export_url }}" title="Выгрузить текущую выборку в CSV">{{ icon('download') }}<span>CSV</span></a>
+  {% if ma.can_create %}
+    <a class="ea-btn ea-btn--primary" href="{{ url_for('eres_admin.create_view', key=ma.key) }}">{{ icon('plus') }}<span>Добавить</span></a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <section class="ea-card ea-card--flush">
+    <form class="ea-toolbar" method="get" data-ea-autosubmit>
+      {% if ma.search %}
+        <label class="ea-search">
+          {{ icon('search') }}
+          <input type="search" name="q" value="{{ term }}" placeholder="Поиск" autocomplete="off" aria-label="Поиск">
+        </label>
+      {% endif %}
+      {% for name, label in ma.filters %}
+        <label class="ea-select" title="{{ label }}">
+          <span class="ea-select-label">{{ label }}</span>
+          <select name="f_{{ name }}">
+            <option value="">все</option>
+            <option value="1" {{ 'selected' if filters.get(name) == '1' }}>да</option>
+            <option value="0" {{ 'selected' if filters.get(name) == '0' }}>нет</option>
+          </select>
+        </label>
+      {% endfor %}
+      {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+      {% if per != ma.per_page %}<input type="hidden" name="per" value="{{ per }}">{% endif %}
+      <span class="ea-toolbar-spacer"></span>
+      <span class="ea-total">{{ total }} {{ 'запись' if total % 10 == 1 and total % 100 != 11 else 'записи' if total % 10 in (2, 3, 4) and total % 100 not in (12, 13, 14) else 'записей' }}</span>
+      {% if term or filters %}<a class="ea-link" href="{{ url_for('eres_admin.list_view', key=ma.key) }}">Сбросить</a>{% endif %}
+    </form>
+
+    {% if ma.can_delete and rows %}
+      <form class="ea-bulk" method="post" action="{{ url_for('eres_admin.bulk_delete_view', key=ma.key) }}" id="eaBulkForm" data-confirm="Удалить выбранные записи? Это действие нельзя отменить." hidden>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+        <input type="hidden" name="next" value="{{ request.full_path }}">
+        <span class="ea-bulk-count" data-ea-bulk-count></span>
+        <button type="submit" class="ea-btn ea-btn--danger ea-btn--sm">{{ icon('trash') }}<span>Удалить выбранные</span></button>
+        <button type="button" class="ea-btn ea-btn--ghost ea-btn--sm" data-ea-bulk-clear>Снять выделение</button>
+      </form>
+    {% endif %}
+
+    {% if rows %}
+      <div class="ea-table-wrap">
+        <table class="ea-table">
+          <thead>
+            <tr>
+              {% if ma.can_delete %}<th class="ea-col-check"><input type="checkbox" data-ea-check-all aria-label="Выбрать все на странице"></th>{% endif %}
+              {% for name, label in ma.list_display %}
+                <th>
+                  {% if name in ma.sortable %}
+                    <a class="ea-sort{% if sort.lstrip('-') == name %} is-on{% endif %}" href="{{ sort_link(name) }}">
+                      {{ label }}
+                      {% if sort == name %}{{ icon('arrow-up', 'ea-icon ea-sort-icon') }}{% elif sort == '-' ~ name %}{{ icon('arrow-down', 'ea-icon ea-sort-icon') }}{% endif %}
+                    </a>
+                  {% else %}{{ label }}{% endif %}
+                </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              {% set href = url_for('eres_admin.edit_view', key=ma.key, pk=ma.pk(row), next=request.full_path) %}
+              <tr data-ea-href="{{ href }}">
+                {% if ma.can_delete %}<td class="ea-col-check"><input type="checkbox" name="ids" value="{{ ma.pk(row) }}" form="eaBulkForm" aria-label="Выбрать"></td>{% endif %}
+                {% for name, label in ma.list_display %}
+                  {% set value = ma.cell(row, name) %}
+                  <td class="{{ 'ea-col-main' if loop.first }}{{ ' ea-col-compact' if ma.is_compact(name) and not loop.first }}" data-label="{{ label }}">
+                    <span class="ea-clip"{% if value|string|length > 30 %} title="{{ value }}"{% endif %}>{% if loop.first %}<a href="{{ href }}">{{ value }}</a>{% else %}{{ value }}{% endif %}</span>
+                    {% if loop.first and ma.list_badges %}
+                      <span class="ea-badges">{% for b in ma.list_badges %}{% if ma.badge_on(row, b) %}<span class="ea-badge">{{ ma.badge_label(b) }}</span>{% endif %}{% endfor %}</span>
+                    {% endif %}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="ea-empty">
+        {{ icon(ma.icon) }}
+        {% if term or filters %}
+          <p>По этому запросу ничего не найдено.</p>
+          <a class="ea-btn ea-btn--ghost" href="{{ url_for('eres_admin.list_view', key=ma.key) }}">Сбросить поиск и фильтры</a>
+        {% else %}
+          <p>Записей пока нет.</p>
+          {% if ma.can_create %}<a class="ea-btn ea-btn--primary" href="{{ url_for('eres_admin.create_view', key=ma.key) }}">{{ icon('plus') }}<span>Добавить первую</span></a>{% endif %}
+        {% endif %}
+      </div>
+    {% endif %}
+
+    {% if rows %}
+      <footer class="ea-table-foot">
+        <form method="get" class="ea-per" data-ea-autosubmit>
+          {% for k, v in request.args.items() %}{% if k not in ('per', 'page') %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+          <label>Показывать по
+            <select name="per">
+              {% for n in per_choices %}<option value="{{ n }}" {{ 'selected' if n == per }}>{{ n }}</option>{% endfor %}
+            </select>
+          </label>
+        </form>
+        {% if pager %}
+          <nav class="ea-pager" aria-label="Страницы">
+            {% for p in pager %}
+              {% if p is none %}<span class="ea-page ea-page--gap">…</span>
+              {% elif p == page %}<span class="ea-page is-on" aria-current="page">{{ p }}</span>
+              {% else %}<a class="ea-page" href="{{ link(page=p) }}">{{ p }}</a>{% endif %}
+            {% endfor %}
+          </nav>
+        {% endif %}
+      </footer>
+    {% endif %}
+  </section>
+{% endblock %}
