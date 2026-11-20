@@ -28,7 +28,8 @@ class ModelAdmin:
                  search=(), order_by="-id", per_page=25,
                  can_create=True, can_edit=True, can_delete=True,
                  fields=(), readonly=False, stat_label=None, stat_count=None,
-                 on_save=None, scope_query=None, icon=None, description=None):
+                 on_save=None, scope_query=None, icon=None, description=None,
+                 object_actions=()):
         self.site = site
         self.model = model
         self.name = name
@@ -64,6 +65,11 @@ class ModelAdmin:
         self.scope_query = scope_query
         self.icon = icon or icons.guess_for_key(self.key)
         self.description = description
+        # Кнопки в карточке записи: {"name", "label", "handler", "icon",
+        # "confirm", "help"}. handler(obj) меняет запись и возвращает список
+        # изменений [(поле, было, стало)]; исключение — текст ошибки для
+        # администратора. Коммит и журнал — на движке (views.object_action_view).
+        self.object_actions = [dict(a) for a in object_actions]
 
     def _column_label(self, name):
         for f in getattr(self, "fields", []) or []:
@@ -166,6 +172,15 @@ class ModelAdmin:
             labels = {str(v): label for v, label in field.choices}
             return labels.get(str(value), format_value(value))
         return format_value(value)
+
+    def object_action(self, name):
+        return next((a for a in self.object_actions if a.get("name") == name), None)
+
+    @staticmethod
+    def is_rich(value):
+        """list_format может вернуть готовую разметку (markupsafe.Markup) —
+        например, раскрывающийся список; такую ячейку не обрезаем."""
+        return hasattr(value, "__html__")
 
     def _field(self, name):
         return next((f for f in self.fields if f.name == name), None)

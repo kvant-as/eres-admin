@@ -335,6 +335,43 @@ def delete_view(key, pk):
     return redirect(request.form.get("next") or url_for(f"{BLUEPRINT}.list_view", key=key))
 
 
+@bp.route("/<key>/<int:pk>/action/<name>", methods=["POST"])
+def object_action_view(key, pk, name):
+    """Действие над записью из карточки (ModelAdmin.object_actions),
+    например «Обновить из ЕГР» у организации."""
+    site = current_site()
+    ma = site.get(key)
+    action = ma.object_action(name) or abort(404)
+    if not ma.can_edit:
+        abort(403)
+    obj = ma.get_obj(pk) or abort(404)
+    label = action.get("label", name)
+    back = url_for(f"{BLUEPRINT}.edit_view", key=key, pk=pk, next=request.form.get("next") or None)
+    try:
+        result = action["handler"](obj) or []
+        site.db.session.commit()
+    except Exception as exc:                               # noqa: BLE001
+        site.db.session.rollback()
+        flash(f"{label}: {exc}", "error")
+        return redirect(back)
+
+    changes = []
+    for item in result:
+        if isinstance(item, dict):
+            changes.append({"field": item.get("field"), "old": item.get("old"), "new": item.get("new")})
+        else:
+            field, old, new = item
+            changes.append({"field": field,
+                            "old": None if old in (None, "") else format_value(old, limit=200),
+                            "new": format_value(new, limit=200)})
+    if changes:
+        _record_log(site, ma, obj, "update", changes)
+        flash(f"{label}: обновлено — " + ", ".join(c["field"] for c in changes), "success")
+    else:
+        flash(f"{label}: изменений нет, данные актуальны", "success")
+    return redirect(back)
+
+
 @bp.route("/<key>/bulk-delete", methods=["POST"])
 def bulk_delete_view(key):
     site = current_site()

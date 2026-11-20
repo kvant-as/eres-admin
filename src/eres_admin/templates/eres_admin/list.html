@@ -71,7 +71,11 @@
                 {% for name, label in ma.list_display %}
                   {% set value = ma.cell(row, name) %}
                   <td class="{{ 'ea-col-main' if loop.first }}{{ ' ea-col-compact' if ma.is_compact(name) and not loop.first }}" data-label="{{ label }}">
+                    {% if ma.is_rich(value) and not loop.first %}
+                    {{ value }}
+                    {% else %}
                     <span class="ea-clip"{% if value|string|length > 30 %} title="{{ value }}"{% endif %}>{% if loop.first %}<a href="{{ href }}">{{ value }}</a>{% else %}{{ value }}{% endif %}</span>
+                    {% endif %}
                     {% if loop.first and ma.list_badges %}
                       <span class="ea-badges">{% for b in ma.list_badges %}{% if ma.badge_on(row, b) %}<span class="ea-badge">{{ ma.badge_label(b) }}</span>{% endif %}{% endfor %}</span>
                     {% endif %}

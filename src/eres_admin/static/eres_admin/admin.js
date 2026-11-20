@@ -359,7 +359,7 @@
 
   document.querySelectorAll('tr[data-ea-href]').forEach(function (row) {
     row.addEventListener('click', function (e) {
-      if (e.target.closest('a, button, input, label, select')) return;
+      if (e.target.closest('a, button, input, label, select, details')) return;
       if (window.getSelection && String(window.getSelection()).length) return;
       if (e.ctrlKey || e.metaKey) window.open(row.getAttribute('data-ea-href'), '_blank');
       else window.location.href = row.getAttribute('data-ea-href');

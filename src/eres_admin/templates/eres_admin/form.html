@@ -137,6 +137,18 @@
           </div>
           <p class="ea-dirty" data-ea-dirty hidden>Есть несохранённые изменения</p>
         {% endif %}
+        {% if not creating and ma.can_edit and ma.object_actions %}
+          <div class="ea-side-actions ea-object-actions">
+            {% for a in ma.object_actions %}
+              <form method="post" action="{{ url_for('eres_admin.object_action_view', key=ma.key, pk=ma.pk(obj), name=a.name) }}"{% if a.confirm %} data-confirm="{{ a.confirm }}"{% endif %}>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+                <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+                <button type="submit" class="ea-btn ea-btn--ghost ea-btn--block">{{ icon(a.icon or 'refresh') }}<span>{{ a.label }}</span></button>
+              </form>
+              {% if a.help %}<p class="ea-object-action-help">{{ a.help }}</p>{% endif %}
+            {% endfor %}
+          </div>
+        {% endif %}
         {% if not creating and ma.can_delete %}
           <form method="post" action="{{ url_for('eres_admin.delete_view', key=ma.key, pk=ma.pk(obj)) }}" class="ea-delete" data-confirm="Удалить «{{ record_title }}»? Это действие нельзя отменить.">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
